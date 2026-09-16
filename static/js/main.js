@@ -9,34 +9,59 @@ const type = document.getElementById('type');
 
 let transactions = [];
 
-function addTransaction(e) {
-     e.preventDefault(); 
+// 1. Veritabanından verileri çek
+async function getTransactions() {
+    try {
+        const res = await fetch('/api/transactions');
+        transactions = await res.json();
+        init();
+    } catch (error) {
+        console.error('Veriler çekilirken hata oluştu:', error);
+    }
+}
+
+// 2. Yeni işlemi veritabanına kaydet
+async function addTransaction(e) {
+    e.preventDefault();
+
     if (desc.value.trim() === '' || amount.value.trim() === '') {
         alert('Lütfen bir açıklama ve tutar girin.');
         return;
     }
 
-
-const transactionAmount = type.value === 'expense' 
+    const transactionAmount = type.value === 'expense' 
         ? -Math.abs(Number(amount.value)) 
         : Math.abs(Number(amount.value));
 
-    const transaction = {
-        id: Math.floor(Math.random() * 100000000),
+    const newTransaction = {
         text: desc.value,
         amount: transactionAmount
     };
 
-    transactions.push(transaction);
-    addTransactionDOM(transaction);
-    updateValues();
-    
-    desc.value = '';
-    amount.value = '';
+    try {
+        const res = await fetch('/api/transactions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(newTransaction)
+        });
+
+        const savedTransaction = await res.json();
+        transactions.push(savedTransaction);
+
+        addTransactionDOM(savedTransaction);
+        updateValues();
+
+        desc.value = '';
+        amount.value = '';
+    } catch (error) {
+        console.error('İşlem kaydedilirken hata oluştu:', error);
+    }
 }
 
+// 3. Ekrana HTML elemanını ekle
 function addTransactionDOM(transaction) {
-    
     const sign = transaction.amount < 0 ? '-' : '+';
     const itemClass = transaction.amount < 0 ? 'expense' : 'income';
 
@@ -52,17 +77,15 @@ function addTransactionDOM(transaction) {
     list.appendChild(item);
 }
 
+// 4. Tutarları hesapla
 function updateValues() {
-    const amounts = transactions.map(transaction => transaction.amount);
-   
+    const amounts = transactions.map(t => t.amount);
+
     const total = amounts.reduce((acc, item) => (acc += item), 0).toFixed(2);
-   
     const income = amounts
         .filter(item => item > 0)
         .reduce((acc, item) => (acc += item), 0)
         .toFixed(2);
-    
-
     const expense = (
         amounts.filter(item => item < 0).reduce((acc, item) => (acc += item), 0) * -1
     ).toFixed(2);
@@ -72,16 +95,27 @@ function updateValues() {
     money_minus.innerText = `-₺${expense}`;
 }
 
-function removeTransaction(id) {
-    transactions = transactions.filter(transaction => transaction.id !== id);
-    init();
+// 5. Veritabanından sil
+async function removeTransaction(id) {
+    try {
+        await fetch(`/api/transactions/${id}`, {
+            method: 'DELETE'
+        });
+
+        transactions = transactions.filter(t => t.id !== id);
+        init();
+    } catch (error) {
+        console.error('Silinirken hata oluştu:', error);
+    }
 }
-// Ekranı baştan başlatma / tazeleme
+
 function init() {
     list.innerHTML = '';
     transactions.forEach(addTransactionDOM);
     updateValues();
 }
-init();
+
+// Sayfa açılınca verileri getir
+getTransactions();
 
 form.addEventListener('submit', addTransaction);
